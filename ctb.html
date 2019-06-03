@@ -109,8 +109,8 @@ class osuCTBView extends myCanvas {
         this.playing=null;
         this.timingPoints=[];
     }
-    static offsetTime;
-    static playing;
+    //static offsetTime;
+    //static playing;
     osuEnvInit(osuData){
         this.ApproachRate=Number( osuData['ApproachRate'] );
         if( isNaN(this.ApproachRate) )this.ApproachRate=Number( osuData['OverallDifficulty'] );
