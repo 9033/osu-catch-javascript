@@ -27,15 +27,6 @@ var fileName = new Vue({
 </script>
 <script>
 //https://osu.ppy.sh/help/wiki/osu!_File_Formats/Osu_(file_format)
-//var ApproachRate=6;
-//var preempt=(ApproachRate>5)?1200-750*(ApproachRate-5)/5:1200+600*(5-ApproachRate)/5;
-//var fade_in=(ApproachRate>5)?800-500*(ApproachRate-5)/5:800+400*(5-ApproachRate)/5;
-//var bpm=140;
-//var beat_period = 1/bpm*60/4;
-
-function uint(n){
-    return n>>>0;
-}
 
 class FastRandom{
     constructor(SEED){
@@ -47,8 +38,6 @@ class FastRandom{
         this._y = this.y;
         this._z = this.z;
         this._w = this.w;
-        
-        //this.intMaxValue=2147483647;//0x7FFFFFFF
     }
     NextUInt(){
         let t = this._x ^ (this._x<<11);
@@ -65,8 +54,6 @@ class FastRandom{
         return this.Next()/0x80000000;
     }
 }
-
-fr=new FastRandom(1337);
 
 class myCanvas{
     constructor(){
@@ -95,22 +82,15 @@ class myCanvas{
         this.ctx.clearRect(0, 0, this.c.width, this.c.height);     
     }
 };
-//myCanvas.ctx=c.getContext("2d");
-//var CircleSize=2.5;
-//myCanvas.radius=54.4 - 4.48 * CircleSize;
-
 
 class osuCTBView extends myCanvas {
     constructor(){
         super();
         this.hitObjects=[];
-        //this.bananas=[];
         this.offsetTime=-1000;
         this.playing=null;
         this.timingPoints=[];
     }
-    //static offsetTime;
-    //static playing;
     osuEnvInit(osuData){
         this.ApproachRate=Number( osuData['ApproachRate'] );
         if( isNaN(this.ApproachRate) )this.ApproachRate=Number( osuData['OverallDifficulty'] );
@@ -169,7 +149,6 @@ class osuCTBView extends myCanvas {
         let sliderObjs=[];
         let Obj=hitObj.split(',');
         let time=Number( Obj[2] );
-        //let {sliderType,curvePoints}=Obj[5].split('|');
         Obj[5]=Obj[5].split('|');
         let sliderType=Obj[5].shift();
         let curvePoints=[];
@@ -202,7 +181,6 @@ class osuCTBView extends myCanvas {
         //osuData['HitObjects']
         //console.log(osuData['HitObjects']);
         this.hitObjects=[];
-        //this.bananas=[];
         for(let obj of osuData['HitObjects']){
             let r=/^(\d+),(\d+),(\d+),(\d+)*/.exec(obj);
             //console.log(r);
@@ -219,35 +197,15 @@ class osuCTBView extends myCanvas {
                 //console.log(obj);
                 //createBananas
                 let bananas=this.createBananas(obj);
-                //console.log(this.hitObjects.length,bananas.length);
                 this.hitObjects=this.hitObjects.concat( bananas );
-                //console.log(this.hitObjects.length);
             }
         }
         this.hitObjects.sort(function(a,b){return a.y-b.y;});
-        //this.bananas.sort(function(a,b){return a.y-b.y;});
     }    
     drawHitCircle(x,y,offsetTime,offsetH){
         this.drawCircle(x,(384-(300/this.fade_in)*( y - offsetTime)),offsetH, 1, 'white' );//(350/fade_in)*
     }
     drawHitObjects(offsetTime){
-        
-        //let offsetTime=hitObjects[0].y;        
-        //for(let hitObject of this.hitObjects){
-        //    //let h = myCanvas.ctx.canvas.height;
-        //    //console.log(hitObject);
-        //    //console.log(hitObject.x,(384-(300/fade_in)*( hitObject.y - offsetTime)) );
-        //    //console.log(this.offsetTime);
-        //    //drawSlider
-        //    //drawSpinner
-        //    if( hitObject.y < offsetTime-1500){
-        //        continue;
-        //    }
-        //    this.drawHitCircle(hitObject.x,hitObject.y,offsetTime,this.offsetH);
-        //    if( hitObject.y > offsetTime+1500){
-        //        break;
-        //    }
-        //}
         while( this.hitObjects.length > 0 ){
             if( this.hitObjects[0].y < offsetTime+1500 ){
                 let hitObject=this.hitObjects.shift();
@@ -266,7 +224,6 @@ class osuCTBView extends myCanvas {
                 break;
             }
         }
-        //this.screenObjects.forEach(function(hitObject){
         for(let hitObject of this.screenObjects){
             if( hitObject.type==1){//fruits
                 this.drawHitCircle(hitObject.x,hitObject.y,offsetTime,this.offsetH);
@@ -275,17 +232,10 @@ class osuCTBView extends myCanvas {
                 this.drawBanana(hitObject.x,hitObject.y,offsetTime,this.offsetH);
             }
         }    
-        //});
-        
     }
     drawBanana(x,y,offsetTime,offsetH){
         this.drawCircle(x,(384-(300/this.fade_in)*( y - offsetTime)),offsetH, 0.5, 'skyblue' );
     }
-    //drawBananas(offsetTime){
-    //    for(let banana of this.bananas){
-    //        this.drawBanana(banana.x,banana.y,offsetTime,this.offsetH);
-    //    }    
-    //}
     playHitObjects(){        
         this.screenObjects=[];
         this.offsetTime=-1000;
@@ -293,40 +243,18 @@ class osuCTBView extends myCanvas {
             clearInterval(this.playing);
         }
         this.playing = setInterval(function(){
-            //osuCTBViewr.ctx.restore();
             osuCTBViewr.clearCanvas();
-            //osuCTBViewr.ctx.clearRect(0, 0, osuCTBViewr.c.width, osuCTBViewr.c.height);            
             osuCTBViewr.drawHitObjects(osuCTBViewr.offsetTime);
-            //osuCTBViewr.drawBananas(osuCTBViewr.offsetTime);
             osuCTBViewr.offsetTime+=50;
         }, 50);
     }
 };
-
-
-
-
-
-
-
-//myCanvas.radius=(1.0 - 0.7 * (CircleSize - 5) / 5);
-//myCanvas.drawCircle(81,384);//456ms
-//myCanvas.drawCircle(32,114);
-//myCanvas.drawCircle(82,1000/700*384-384);//884ms
-//myCanvas.drawCircle(82,(350/fade_in)*(884-456));//884ms
-
-
-
-
-
 
 </script>
 <script>
 /*
 // attach a file
 */
-//var photoData;
-
 var osuCTBViewr=new osuCTBView();
 var osuData
 var fileData;
@@ -334,7 +262,7 @@ var files;
 function dropFile(e){
     files=e.originalEvent.dataTransfer.files[0];
     fileName.filename=files.name;
-    //preview
+    //read osu file
     const reader = new FileReader();
     reader.onload = function(evt) {
         fileData=evt.target.result;
@@ -344,17 +272,11 @@ function dropFile(e){
         osuData=readOsu(osuFileData);
         osuCTBViewr.osuEnvInit(osuData);
         osuCTBViewr.readHitObjects(osuData);
-        //osuCTBViewr.drawHitObjects(100);
-        //osuCTBViewr.ctx.save();
         osuCTBViewr.playHitObjects();
     };
     
-    
-    
     if( /.+\.osu$/.test(files.name) ==true){
-        // reader.readAsArrayBuffer(e.originalEvent.dataTransfer.files[0]);
-        //reader.readAsDataURL(e.originalEvent.dataTransfer.files[0]);//base64
-        reader.readAsText(e.originalEvent.dataTransfer.files[0]);//text
+        reader.readAsText(files);//text
     }
     else {
         fileName.filename+=' is not osu file!!';
@@ -364,8 +286,6 @@ $('#file').bind('dragenter',function(e){e.stopPropagation();e.preventDefault();}
 $('#file').bind('dragover',function(e){e.stopPropagation();e.preventDefault();});
 $('#file').bind('drop',function(e){e.stopPropagation();e.preventDefault();dropFile(e);});
 
-//fileData.split('\n')
-//document.querySelector("#fileContents").onchange=function(){console.log('loaded');};
 function readOsu( osuFileData ){
     let osuData={};
     let idx=0;
@@ -374,39 +294,14 @@ function readOsu( osuFileData ){
         if( /^osu file format/.test(line) ){
             osuData['osu file foramt']=/osu file format\s(\w+)/.exec(line)[1];//'v14'
         }
-        //else if( /^([^:,]+):\s*([\d.]+)$/.test(line) ){
-        //    let result=/^(.+):(.+)$/.exec(line);
-        //    osuData[ result[1] ]=Number( result[2] );
-        //}
         else if( /^([^:,]+):(.+)$/.test(line) ){
             let result=/^(.+):(.+)$/.exec(line);
             osuData[ result[1] ]=result[2];
         }
-        //else if( /CircleSize/.test(line) ){
-        //    osuData['CircleSize']=Number( /[^:]+:(.+)/.exec(line)[1] );
-        //}
-        //else if( /ApproachRate/.test(line) ){
-        //    osuData['ApproachRate']=Number( /[^:]+:(.+)/.exec(line)[1] );
-        //}
-        //else if( /SliderMultiplier/.test(line) ){
-        //    osuData['SliderMultiplier']=Number( /[^:]+:(.+)/.exec(line)[1] );
-        //}
-        //else if( /SliderTickRate/.test(line) ){
-        //    osuData['SliderTickRate']=Number( /[^:]+:(.+)/.exec(line)[1] );
-        //}
         else if( /\[.+\]/.test(line) ){
             let result=/\[(.+)\]/.exec(line);
-            if( result[1]=='HitObjects' ){
-            }
-            else if( result[1]=='TimingPoints' ){
-            }
-            else if( result[1]=='Colours' ){
-            }
-            else if( result[1]=='Events'){
-            }
-            else{
+            if( false == ['HitObjects','TimingPoints','Colours','Events'].includes( result[1] ) )
                 continue;
-            }
             osuData[ result[1] ]=[];
             idx++;
             for(;idx<osuFileData.length;idx++){
