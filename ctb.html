@@ -28,6 +28,101 @@ var fileName = new Vue({
 <script>
 //https://osu.ppy.sh/help/wiki/osu!_File_Formats/Osu_(file_format)
 
+
+class vector{
+    constructor(x,y){
+        this.x = x || 0;
+        this.y = y || 0;
+    }
+    eq(v){
+        return this.x == v.x && this.y == v.y;
+    }
+    len(){
+        return Math.sqrt( this.x * this.x + this.y * this.y );
+    }
+}
+
+
+PathApproximator={
+    ApproximateLinear( controlPoints ){
+        let result = [];
+        for(c of controlPoints){
+            result.push( c );
+        }
+        return result;
+    }    
+}
+
+
+class SliderPath{
+    constructor(pathType,controlPoints){
+        this.pathType=pathType;
+        this.controlPoints=controlPoints;
+
+        this.calculatedPath=[];
+        this.cumulativeLength=[];
+        this.isInitialised=false;
+        this.Distance=0;
+    }
+    ensureInitialised(){
+        if (this.isInitialised)
+            return;
+            
+        this.isInitialised = true;        
+        
+        this.calculatePath();
+        this.calculateCumulativeLength();
+        this.Distance=(this.cumulativeLength==0)?0:this.cumulativeLength[ this.cumulativeLength.length-1 ];
+    }
+}
+SliderPath.prototype.calculateCumulativeLength=function(  ){
+    let l=0;
+    this.cumulativeLength=[];
+    this.cumulativeLength.push(l);
+    for(let i=0;i<this.calculatedPath.length-1;i++){
+        let diff = new vector( this.calculatedPath[i+1].x-this.calculatedPath[i].x,this.calculatedPath[i+1].y-this.calculatedPath[i].y);
+        let d=diff.len();
+        l+=d;
+        this.cumulativeLength.push(l);
+    }
+}
+SliderPath.prototype.calculateSubpath=function( subControlPoints ){
+    if( this.pathType=='L'){
+        return PathApproximator.ApproximateLinear(subControlPoints);
+    }
+    //return 
+}
+SliderPath.prototype.calculatePath=function(){
+    this.calculatedPath=[];
+    let start=0;
+    let end=0;
+    for(let i=0;i<this.controlPoints.length;i++){
+        end++;
+        if(i==this.controlPoints.length-1 || this.controlPoints[i].eq( this.controlPoints[i+1] )){
+            let cpSpan = this.controlPoints.slice(start, end);
+            for(t of this.calculateSubpath( cpSpan )){
+                if( this.calculatedPath.length==0 || this.calculatedPath[ this.calculatedPath.length-1] != t)
+                    this.calculatedPath.push( t );
+            }
+            start = end;
+        }
+    }
+}
+SliderPath.prototype.progressToDistance=function(progress){
+    return null;//MathHelper.Clamp(progress, 0, 1) * Distance;
+}
+SliderPath.prototype.interpolateVertices=function(i,d){
+    return null;
+}
+SliderPath.prototype.indexOfDistance=function(i,d){
+    return null;
+}
+SliderPath.prototype.PositionAt=function(progress){
+    //ensureInitialised();
+    let d=this.progressToDistance(progress);
+    return this.interpolateVertices(this.indexOfDistance(d), d);
+}
+
 class FastRandom{
     constructor(SEED){
         this._x=Number.parseInt(SEED);
@@ -148,14 +243,14 @@ class osuCTBView extends myCanvas {
         //osu-framework-master\osu.Framework\MathUtils\PathApproximator.cs
         let sliderObjs=[];
         let Obj=hitObj.split(',');
-        let time=Number( Obj[2] );
+        let time=Number( Obj[2] );//startTime
         Obj[5]=Obj[5].split('|');
         let sliderType=Obj[5].shift();
         let curvePoints=[];
         curvePoints.push({x:Number(Obj[0]) ,y: Number(Obj[1]) });
         Obj[5].forEach(function(point){
-                point=point.split(":");
-                curvePoints.push({x: Number(point[0]) ,y: Number(point[1]) });
+            point=point.split(":");
+            curvePoints.push({x: Number(point[0]) ,y: Number(point[1]) });
         });
         //console.log(curvePoints);        
         let repeat=Number( Obj[6] );
@@ -163,18 +258,20 @@ class osuCTBView extends myCanvas {
         let BeatDuration=this.timing(time);
         let sliderDuration=pixelLength / (100.0 * this.SliderMultiplier) * BeatDuration;
         
-        if( sliderType=='L'){
-            //console.log('linear');
-        }
-        else if( sliderType=='P'){
-            //console.log('perfect');
-        }
-        else if( sliderType=='B'){
-            //console.log('Bezier');
-        }
-        else if( sliderType=='C'){
-            //console.log('Catmull');
-        }
+        /*
+        create path with curvepoints, slidertime
+        create timing
+        
+        for timing and path
+            generation tiny droplets at time by time
+            switch event-type
+                tick
+                    add droplet on path.potionat( time ) to objs
+                repeat
+                head
+                tail
+                    add fruit on path.potionat( time ) to objs
+        */
         return sliderObjs;
     }
     readHitObjects(osuData){
@@ -318,5 +415,23 @@ function readOsu( osuFileData ){
     return osuData;
 }
 </script>
+<script>
 
+testVectors=[];
+testVectors.push( new vector(1,2) );
+testVectors.push( new vector(5,6) );
+testVectors.push( new vector(1,2) );
+console.log( testVectors[0]==testVectors[1] );
+console.log( testVectors[0]==testVectors[2] );
+console.log( testVectors[0].eq( testVectors[1] ) );
+console.log( testVectors[0].eq( testVectors[2] ) );
 
+sp= new SliderPath('L',testVectors);
+sp.ensureInitialised();
+console.log(sp.controlPoints);
+console.log(sp.calculatedPath);
+console.log(sp.cumulativeLength);
+console.log(sp.Distance);
+console.log(sp.PositionAt(0.5));
+
+</script>
