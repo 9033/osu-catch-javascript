@@ -28,6 +28,12 @@ var fileName = new Vue({
 <script>
 //https://osu.ppy.sh/help/wiki/osu!_File_Formats/Osu_(file_format)
 
+function AlmostEquals(v1, v2){
+    return Math.abs(v1 - v2) <= 1e-7;
+}
+function Clamp(n,min,max){
+    return Math.max( Math.min(n,max), min);
+}
 
 class vector{
     constructor(x,y){
@@ -40,13 +46,28 @@ class vector{
     len(){
         return Math.sqrt( this.x * this.x + this.y * this.y );
     }
+    add(v){
+        return new vector(this.x+v.x,this.y+v.y);
+    }
+    // addS(s){
+    //     return new vector(this.x+s,this.y+s);
+    // }
+    sub(v){
+        return new vector(this.x-v.x,this.y-v.y);
+    }
+    // div(v){
+    //     return new vector(this.x/v.x,this.y/v.y);
+    // }
+    mulS(s){
+        return new vector(this.x*s,this.y*s);
+    }
 }
 
 
 PathApproximator={
     ApproximateLinear( controlPoints ){
         let result = [];
-        for(c of controlPoints){
+        for(let c of controlPoints){
             result.push( c );
         }
         return result;
@@ -57,7 +78,7 @@ PathApproximator={
 class SliderPath{
     constructor(pathType,controlPoints){
         this.pathType=pathType;
-        this.controlPoints=controlPoints;
+        this.controlPoints=controlPoints;//vector
 
         this.calculatedPath=[];
         this.cumulativeLength=[];
@@ -72,7 +93,7 @@ class SliderPath{
         
         this.calculatePath();
         this.calculateCumulativeLength();
-        this.Distance=(this.cumulativeLength==0)?0:this.cumulativeLength[ this.cumulativeLength.length-1 ];
+        this.Distance=this.cumulativeLength[ this.cumulativeLength.length-1 ] | 0;
     }
 }
 SliderPath.prototype.calculateCumulativeLength=function(  ){
@@ -80,7 +101,7 @@ SliderPath.prototype.calculateCumulativeLength=function(  ){
     this.cumulativeLength=[];
     this.cumulativeLength.push(l);
     for(let i=0;i<this.calculatedPath.length-1;i++){
-        let diff = new vector( this.calculatedPath[i+1].x-this.calculatedPath[i].x,this.calculatedPath[i+1].y-this.calculatedPath[i].y);
+        let diff = this.calculatedPath[i+1].sub(this.calculatedPath[i]);//new vector( this.calculatedPath[i+1].x-this.calculatedPath[i].x,this.calculatedPath[i+1].y-this.calculatedPath[i].y);
         let d=diff.len();
         l+=d;
         this.cumulativeLength.push(l);
@@ -100,8 +121,8 @@ SliderPath.prototype.calculatePath=function(){
         end++;
         if(i==this.controlPoints.length-1 || this.controlPoints[i].eq( this.controlPoints[i+1] )){
             let cpSpan = this.controlPoints.slice(start, end);
-            for(t of this.calculateSubpath( cpSpan )){
-                if( this.calculatedPath.length==0 || this.calculatedPath[ this.calculatedPath.length-1] != t)
+            for(let t of this.calculateSubpath( cpSpan )){
+                if( this.calculatedPath.length==0 || !this.calculatedPath[ this.calculatedPath.length-1].eq(t) )
                     this.calculatedPath.push( t );
             }
             start = end;
@@ -109,16 +130,41 @@ SliderPath.prototype.calculatePath=function(){
     }
 }
 SliderPath.prototype.progressToDistance=function(progress){
-    return null;//MathHelper.Clamp(progress, 0, 1) * Distance;
+    return Clamp(progress,0,1)*this.Distance;//MathHelper.Clamp(progress, 0, 1) * Distance;
 }
 SliderPath.prototype.interpolateVertices=function(i,d){
-    return null;
+    if( this.calculatePath.length==0)
+        return new vector(0,0);
+    
+    if(i<=0)
+        return this.calculatePath[0];
+    if(i>=this.calculatePath.length)
+        return this.calculatePath[this.calculatePath.length-1];
+
+    let p0=this.calculatePath[i-1];
+    let p1=this.calculatePath[i];
+
+    let d0=this.cumulativeLength[i-1];
+    let d1=this.cumulativeLength[i];
+
+    if(AlmostEquals(d0,d1))
+        return p0;
+
+    let w=(d-d0)/(d1-d0);
+    let t=p1.sub(p0);
+    t=t.mulS(w);    
+    return p0.add(t);
 }
-SliderPath.prototype.indexOfDistance=function(i,d){
-    return null;
+SliderPath.prototype.indexOfDistance=function(d){
+    for(let i=0;i<this.cumulativeLength.length-1;i++){
+        if(d<=this.cumulativeLength[i]){
+            return i;
+        }
+    }
+    return this.cumulativeLength.length-1;
 }
 SliderPath.prototype.PositionAt=function(progress){
-    //ensureInitialised();
+    this.ensureInitialised();
     let d=this.progressToDistance(progress);
     return this.interpolateVertices(this.indexOfDistance(d), d);
 }
@@ -163,15 +209,15 @@ class myCanvas{
         let screenRatio=(w/640);
         return {x:x*(w/640),y:y*screenRatio};
     }
-    drawCircle(positionX,positionY,offsetH, sizeRatio,fillColor){        
+    drawCircle(positionX,positionY, sizeRatio,fillColor){        
         let xy=this.xyRatio(positionX+64,positionY+48);
         let newRadius = this.radius*(this.ctx.canvas.width/800)*sizeRatio;
         this.ctx.beginPath();
         //console.log(xy.x,xy.y+offsetH);
-        this.ctx.arc(xy.x,xy.y+offsetH, newRadius, 0,2*Math.PI);
+        this.ctx.arc(xy.x,xy.y+this.offsetH, newRadius, 0,2*Math.PI);
         this.ctx.fillStyle=fillColor;
         this.ctx.fill();        
-        return {x:xy.x, y:xy.y+offsetH};
+        return {x:xy.x, y:xy.y+this.offsetH};
     }
     clearCanvas(){
         this.ctx.clearRect(0, 0, this.c.width, this.c.height);     
@@ -247,7 +293,7 @@ class osuCTBView extends myCanvas {
         Obj[5]=Obj[5].split('|');
         let sliderType=Obj[5].shift();
         let curvePoints=[];
-        curvePoints.push({x:Number(Obj[0]) ,y: Number(Obj[1]) });
+        curvePoints.push( new vector(Number(Obj[0]),Number(Obj[1])) );//curvePoints.push({x:Number(Obj[0]) ,y: Number(Obj[1]) });
         Obj[5].forEach(function(point){
             point=point.split(":");
             curvePoints.push({x: Number(point[0]) ,y: Number(point[1]) });
@@ -299,8 +345,8 @@ class osuCTBView extends myCanvas {
         }
         this.hitObjects.sort(function(a,b){return a.y-b.y;});
     }    
-    drawHitCircle(x,y,offsetTime,offsetH){
-        this.drawCircle(x,(384-(300/this.fade_in)*( y - offsetTime)),offsetH, 1, 'white' );//(350/fade_in)*
+    drawHitCircle(x,y,offsetTime){
+        this.drawCircle(x,(384-(300/this.fade_in)*( y - offsetTime)), 1, 'white' );//(350/fade_in)*
     }
     drawHitObjects(offsetTime){
         while( this.hitObjects.length > 0 ){
@@ -323,15 +369,15 @@ class osuCTBView extends myCanvas {
         }
         for(let hitObject of this.screenObjects){
             if( hitObject.type==1){//fruits
-                this.drawHitCircle(hitObject.x,hitObject.y,offsetTime,this.offsetH);
+                this.drawHitCircle(hitObject.x,hitObject.y,offsetTime);
             }
             if( hitObject.type==8){//bananas
-                this.drawBanana(hitObject.x,hitObject.y,offsetTime,this.offsetH);
+                this.drawBanana(hitObject.x,hitObject.y,offsetTime);
             }
         }    
     }
-    drawBanana(x,y,offsetTime,offsetH){
-        this.drawCircle(x,(384-(300/this.fade_in)*( y - offsetTime)),offsetH, 0.5, 'skyblue' );
+    drawBanana(x,y,offsetTime){
+        this.drawCircle(x,(384-(300/this.fade_in)*( y - offsetTime)), 0.5, 'skyblue' );
     }
     playHitObjects(){        
         this.screenObjects=[];
