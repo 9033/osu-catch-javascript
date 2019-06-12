@@ -63,8 +63,97 @@ class vector{
     }
 }
 
+var SliderEvent={
+    Generate(startTime,spanDuration,velocity,tickDistance,totalDistance,spanCount,legacyLastTickOffset=0){
+        let SliderEvents=[];
 
-PathApproximator={
+        let length=Math.min(100000,totalDistance);
+        tickDistance=Clamp(tickDistance,0,length);
+
+        let minDistanceFromEnd=velocity*10;
+
+        SliderEvents.push(
+            {
+                Type:"Head",
+                SpanIndex:0,
+                SpanStartTime:startTime,
+                Time:startTime,
+                PathProgress:0
+            }
+        );
+        
+        if(tickDistance!=0){
+            for(let span=0;span<spanCount;span++){
+                let spanStartTime=startTime + span * spanDuration;
+                let reversed = span % 2 == 1;
+                
+                for(let d=tickDistance;d<=length;d+=tickDistance){
+                    if(d>=length-minDistanceFromEnd)
+                        break;
+
+                    let pathProgress =d/length;
+                    let timeProgress=reversed?1-pathProgress:pathProgress;
+
+                    SliderEvents.push(
+                        {
+                            Type:"Tick",
+                            SpanIndex:span,
+                            SpanStartTime:spanStartTime,
+                            Time:spanStartTime + timeProgress * spanDuration,
+                            PathProgress:pathProgress
+                        }
+                    );
+
+                    if(span<spanCount-1){
+                        SliderEvents.push(
+                            {
+                                Type:"Repeat",
+                                SpanIndex:span,
+                                SpanStartTime:startTime + span * spanDuration,
+                                Time:spanStartTime + spanDuration,
+                                PathProgress:(span + 1) % 2,
+                            }
+                        );
+                    }
+
+                }
+            }
+        }
+
+        let totalDuration = spanCount * spanDuration;
+
+        let finalSpanIndex = spanCount - 1;
+        let finalSpanStartTime = startTime + finalSpanIndex * spanDuration;
+        let finalSpanEndTime = Math.max(startTime + totalDuration / 2, (finalSpanStartTime + spanDuration) - legacyLastTickOffset);
+        let finalProgress = (finalSpanEndTime - finalSpanStartTime) / spanDuration;
+
+        if (spanCount % 2 == 0) finalProgress = 1 - finalProgress; 
+
+        SliderEvents.push(
+            {
+                Type:"LegacyLastTick",
+                SpanIndex:finalSpanIndex,
+                SpanStartTime:finalSpanStartTime,
+                Time:finalSpanEndTime,
+                PathProgress:finalProgress
+            }
+        );
+
+        SliderEvents.push(
+            {
+                Type:"Tail",
+                SpanIndex:finalSpanIndex,
+                SpanStartTime:startTime + (spanCount - 1) * spanDuration,
+                Time:startTime + totalDuration,
+                PathProgress:spanCount % 2
+            }
+        );
+
+        return SliderEvents;
+    }
+}
+
+var PathApproximator={
     ApproximateLinear( controlPoints ){
         let result = [];
         for(let c of controlPoints){
@@ -111,7 +200,7 @@ SliderPath.prototype.calculateSubpath=function( subControlPoints ){
     if( this.pathType=='L'){
         return PathApproximator.ApproximateLinear(subControlPoints);
     }
-    //return 
+    return [];
 }
 SliderPath.prototype.calculatePath=function(){
     this.calculatedPath=[];
@@ -241,28 +330,27 @@ class osuCTBView extends myCanvas {
         this.radius=54.4 - 4.48 * this.CircleSize;
         
         this.SliderMultiplier=Number( osuData['SliderMultiplier'] );
+        this.SliderTickRate=Number( osuData['SliderTickRate'] );
         
         this.timingPoints=[];
+        let msPerBeat_P=1000;
         for(let point of osuData['TimingPoints']){
             let t = point.split(',');
-            this.timingPoints.push( {offset: Number( t[0]) , msPerBeat: Number( t[1] ) });
+            let msPerBeat=Number( t[1] );
+            if( msPerBeat > 0 )
+                msPerBeat_P=msPerBeat;
+            this.timingPoints.push( {
+                offset: Number( t[0])
+                , msPerBeat: msPerBeat
+                , msPerBeat_P: msPerBeat_P
+                , meter:Number( t[2] )
+                , sampleSet:Number( t[3] )
+                , sampleIndex:Number( t[4] )
+                , volume:Number( t[5] )
+                , inherited:Number( t[6] )
+                , kiaiMode:Number( t[7] )
+            });
         }
-    }
-    timing(offset){
-        let BeatDuration=500;
-        for(let point of this.timingPoints){
-            if( offset >= point.offset){
-                BeatDuration = point.msPerBeat;
-                break;
-            }
-        }
-        if( BeatDuration == -100 ){
-            BeatDuration=500;
-        }
-        else if( BeatDuration == -50 ){
-            BeatDuration=250;
-        }
-        return BeatDuration;
     }
     createBananas(hitObj){
         let bananas = [];
@@ -284,6 +372,21 @@ class osuCTBView extends myCanvas {
         return bananas;
     }
     createSlider(hitObj){
+        function timingPoint(offset,timingPoints){
+            for(let point of timingPoints){
+                if( offset >= point.offset){
+                    return point;
+                }
+            }
+        }
+        function beatDuration(offset,timingPoints){
+            let point=timingPoint(offset,timingPoints);
+            let BeatDuration=point.msPerBeat;
+            if(BeatDuration<0){
+                BeatDuration=-1*point.msPerBeat_P*BeatDuration/100;
+            }
+            return BeatDuration;
+        }
         //osu-master\osu.Game.Rulesets.Catch\Objects\JuiceStream.cs
         //osu-master\osu.Game\Rulesets\Objects\SliderEventGenerator.cs        
         //osu-framework-master\osu.Framework\MathUtils\PathApproximator.cs
@@ -296,14 +399,32 @@ class osuCTBView extends myCanvas {
         curvePoints.push( new vector(Number(Obj[0]),Number(Obj[1])) );//curvePoints.push({x:Number(Obj[0]) ,y: Number(Obj[1]) });
         Obj[5].forEach(function(point){
             point=point.split(":");
-            curvePoints.push({x: Number(point[0]) ,y: Number(point[1]) });
+            //curvePoints.push({x: Number(point[0]) ,y: Number(point[1]) });
+            curvePoints.push( new vector( Number(point[0]) , Number(point[1]) ));
         });
         //console.log(curvePoints);        
         let repeat=Number( Obj[6] );
         let pixelLength=Number( Obj[7] );
-        let BeatDuration=this.timing(time);
-        let sliderDuration=pixelLength / (100.0 * this.SliderMultiplier) * BeatDuration;
+        //let BeatDuration=beatDuration(time,this.timingPoints);
+        //let sliderDuration=pixelLength / (100.0 * this.SliderMultiplier) * BeatDuration;
+        let SpanCount=repeat+1;
         
+        //LegacyBeatmapDecoder
+        let timepoint=timingPoint(time,this.timingPoints);
+        let beatLength=timepoint.msPerBeat;
+        let speedMultiplier= beatLength < 0 ? 100.0 / -beatLength : 1;
+
+        //JuiceStream
+        let sliderPath = new SliderPath(sliderType,curvePoints);
+        sliderPath.ensureInitialised();
+        let base_scoring_distance = 100;//const
+        let scoringDistance=base_scoring_distance * this.SliderMultiplier * speedMultiplier;
+        let Velocity = scoringDistance / beatLength;
+        let EndTime=time+SpanCount*sliderPath.Distance/ Velocity;
+        let Duration=EndTime-time;
+        let Distance=sliderPath.Distance;
+        let SpanDuration=Duration/SpanCount;
+        let TickDistance = scoringDistance / this.SliderTickRate;
         /*
         create path with curvepoints, slidertime
         create timing
@@ -318,6 +439,48 @@ class osuCTBView extends myCanvas {
                 tail
                     add fruit on path.potionat( time ) to objs
         */
+        let sliderEvents = SliderEvent.Generate(time,SpanDuration,Velocity,TickDistance,Distance,SpanCount);
+
+        let lastEvt=null;
+        let X=Number( Obj[0] );
+        for(let evt of sliderEvents){
+            if(lastEvt!=null){
+                let sinceLastTick=evt.Time-lastEvt.Time;
+
+                if(sinceLastTick>80){
+                    let timeBetweenTiny = sinceLastTick;
+                    while(timeBetweenTiny>100)
+                        timeBetweenTiny/=2;
+
+                    for(let t=timeBetweenTiny;t<sinceLastTick;t+=timeBetweenTiny){
+                        sliderObjs.push({                            
+                            x:X+sliderPath.PositionAt(lastEvt.PathProgress+(t/sinceLastTick)*(evt.PathProgress-lastEvt.PathProgress)).x/512
+                            ,y:t+lastEvt.Time
+                            ,name:'Tiny'
+                            ,type:2
+                        });
+                    }
+                }
+            }
+            lastEvt=evt;
+            switch(evt.Type){
+                case 'Tick': 
+                    sliderObjs.push({                            
+                        x:X+sliderPath.PositionAt(evt.PathProgress).x/512
+                        ,y:evt.Time
+                        ,name:'Droplet'
+                        ,type:2
+                    });
+                    break;
+                default:
+                    sliderObjs.push({                            
+                        x:X+sliderPath.PositionAt(evt.PathProgress).x/512
+                        ,y:evt.Time
+                        ,name:'Fruit'
+                        ,type:2
+                    });
+            }
+        }
         return sliderObjs;
     }
     readHitObjects(osuData){
@@ -370,6 +533,22 @@ class osuCTBView extends myCanvas {
         for(let hitObject of this.screenObjects){
             if( hitObject.type==1){//fruits
                 this.drawHitCircle(hitObject.x,hitObject.y,offsetTime);
+            }
+            if( hitObject.type==2){//slider
+                let x=hitObject.x;
+                let y=hitObject.y;
+                switch(hitObject.name){
+                    case 'Fruit':
+                        this.drawCircle(x,(384-(300/this.fade_in)*( y - offsetTime)), 1, 'red' );
+                        break;
+                    case 'Droplet':
+                        this.drawCircle(x,(384-(300/this.fade_in)*( y - offsetTime)), 0.5, 'red' );
+                        break;
+                    case 'Tiny':
+                        this.drawCircle(x,(384-(300/this.fade_in)*( y - offsetTime)), 0.25, 'red' );
+                        break;
+                }
+                //this.drawHitCircle(hitObject.x,hitObject.y,offsetTime);
             }
             if( hitObject.type==8){//bananas
                 this.drawBanana(hitObject.x,hitObject.y,offsetTime);
