@@ -13,6 +13,7 @@ drop osu file here
 </div>
 <textarea readonly id='fileContents'></textarea>
 <canvas id="myCanvas" width="400" height="300" style="background-color:#333 "></canvas>
+<progress></progress>
 <script>
 /*
 // by vue.js
@@ -222,16 +223,16 @@ SliderPath.prototype.progressToDistance=function(progress){
     return Clamp(progress,0,1)*this.Distance;//MathHelper.Clamp(progress, 0, 1) * Distance;
 }
 SliderPath.prototype.interpolateVertices=function(i,d){
-    if( this.calculatePath.length==0)
+    if( this.calculatedPath.length==0)
         return new vector(0,0);
     
     if(i<=0)
-        return this.calculatePath[0];
-    if(i>=this.calculatePath.length)
-        return this.calculatePath[this.calculatePath.length-1];
+        return this.calculatedPath[0];
+    if(i>=this.calculatedPath.length)
+        return this.calculatedPath[this.calculatedPath.length-1];
 
-    let p0=this.calculatePath[i-1];
-    let p1=this.calculatePath[i];
+    let p0=this.calculatedPath[i-1];
+    let p1=this.calculatedPath[i];
 
     let d0=this.cumulativeLength[i-1];
     let d1=this.cumulativeLength[i];
@@ -309,6 +310,7 @@ class myCanvas{
         return {x:xy.x, y:xy.y+this.offsetH};
     }
     clearCanvas(){
+        this.c.onchange();
         this.ctx.clearRect(0, 0, this.c.width, this.c.height);     
     }
 };
@@ -320,6 +322,7 @@ class osuCTBView extends myCanvas {
         this.offsetTime=-1000;
         this.playing=null;
         this.timingPoints=[];
+        this.lastObjectTime=0;
     }
     osuEnvInit(osuData){
         this.ApproachRate=Number( osuData['ApproachRate'] );
@@ -407,7 +410,7 @@ class osuCTBView extends myCanvas {
         let pixelLength=Number( Obj[7] );
         //let BeatDuration=beatDuration(time,this.timingPoints);
         //let sliderDuration=pixelLength / (100.0 * this.SliderMultiplier) * BeatDuration;
-        let SpanCount=repeat+1;
+        let SpanCount=repeat;
         
         //LegacyBeatmapDecoder
         let timepoint=timingPoint(time,this.timingPoints);
@@ -440,9 +443,9 @@ class osuCTBView extends myCanvas {
                     add fruit on path.potionat( time ) to objs
         */
         let sliderEvents = SliderEvent.Generate(time,SpanDuration,Velocity,TickDistance,Distance,SpanCount);
-
+        //console.log(sliderEvents);
         let lastEvt=null;
-        let X=Number( Obj[0] );
+        //let X=Number( Obj[0] );
         for(let evt of sliderEvents){
             if(lastEvt!=null){
                 let sinceLastTick=evt.Time-lastEvt.Time;
@@ -453,8 +456,9 @@ class osuCTBView extends myCanvas {
                         timeBetweenTiny/=2;
 
                     for(let t=timeBetweenTiny;t<sinceLastTick;t+=timeBetweenTiny){
+                        //console.log(X,lastEvt.PathProgress+(t/sinceLastTick)*(evt.PathProgress-lastEvt.PathProgress),sliderPath.PositionAt(lastEvt.PathProgress+(t/sinceLastTick)*(evt.PathProgress-lastEvt.PathProgress)).x,t+lastEvt.Time);
                         sliderObjs.push({                            
-                            x:X+sliderPath.PositionAt(lastEvt.PathProgress+(t/sinceLastTick)*(evt.PathProgress-lastEvt.PathProgress)).x/512
+                            x:sliderPath.PositionAt(lastEvt.PathProgress+(t/sinceLastTick)*(evt.PathProgress-lastEvt.PathProgress)).x
                             ,y:t+lastEvt.Time
                             ,name:'Tiny'
                             ,type:2
@@ -466,19 +470,24 @@ class osuCTBView extends myCanvas {
             switch(evt.Type){
                 case 'Tick': 
                     sliderObjs.push({                            
-                        x:X+sliderPath.PositionAt(evt.PathProgress).x/512
+                        x:sliderPath.PositionAt(evt.PathProgress).x
                         ,y:evt.Time
                         ,name:'Droplet'
                         ,type:2
                     });
                     break;
-                default:
+                case 'Head': 
+                case 'Tail': 
+                case 'Repeat': 
                     sliderObjs.push({                            
-                        x:X+sliderPath.PositionAt(evt.PathProgress).x/512
+                        x:sliderPath.PositionAt(evt.PathProgress).x
                         ,y:evt.Time
                         ,name:'Fruit'
                         ,type:2
                     });
+                    break;
+                default:
+                    break;
             }
         }
         return sliderObjs;
@@ -496,7 +505,9 @@ class osuCTBView extends myCanvas {
             }
             //slider
             if( Number(r[4]) & 2 ){
-                this.hitObjects=this.hitObjects.concat( this.createSlider(obj) );
+                let sliderObjects= this.createSlider(obj);
+                //console.log(sliderObjects);
+                this.hitObjects=this.hitObjects.concat(sliderObjects );
             }
             //spinner
             if( Number(r[4]) & 8 ){
@@ -507,11 +518,13 @@ class osuCTBView extends myCanvas {
             }
         }
         this.hitObjects.sort(function(a,b){return a.y-b.y;});
+        this.lastObjectTime=this.hitObjects[ this.hitObjects.length-1 ].y || 0;
     }    
     drawHitCircle(x,y,offsetTime){
         this.drawCircle(x,(384-(300/this.fade_in)*( y - offsetTime)), 1, 'white' );//(350/fade_in)*
     }
     drawHitObjects(offsetTime){
+        this.clearCanvas();
         while( this.hitObjects.length > 0 ){
             if( this.hitObjects[0].y < offsetTime+1500 ){
                 let hitObject=this.hitObjects.shift();
@@ -534,7 +547,7 @@ class osuCTBView extends myCanvas {
             if( hitObject.type==1){//fruits
                 this.drawHitCircle(hitObject.x,hitObject.y,offsetTime);
             }
-            if( hitObject.type==2){//slider
+            else if( hitObject.type==2){//slider
                 let x=hitObject.x;
                 let y=hitObject.y;
                 switch(hitObject.name){
@@ -545,12 +558,13 @@ class osuCTBView extends myCanvas {
                         this.drawCircle(x,(384-(300/this.fade_in)*( y - offsetTime)), 0.5, 'red' );
                         break;
                     case 'Tiny':
+                        //console.log(x,y);
                         this.drawCircle(x,(384-(300/this.fade_in)*( y - offsetTime)), 0.25, 'red' );
                         break;
                 }
                 //this.drawHitCircle(hitObject.x,hitObject.y,offsetTime);
             }
-            if( hitObject.type==8){//bananas
+            else if( hitObject.type==8){//bananas
                 this.drawBanana(hitObject.x,hitObject.y,offsetTime);
             }
         }    
@@ -563,12 +577,15 @@ class osuCTBView extends myCanvas {
         this.offsetTime=-1000;
         if( this.playing != null ){
             clearInterval(this.playing);
-        }
-        this.playing = setInterval(function(){
-            osuCTBViewr.clearCanvas();
-            osuCTBViewr.drawHitObjects(osuCTBViewr.offsetTime);
-            osuCTBViewr.offsetTime+=50;
-        }, 50);
+        }        
+        this.playing = setInterval(function(t){
+            t.drawHitObjects(t.offsetTime);
+            t.offsetTime+=50;
+        }, 50,this);
+        setTimeout(function(t){
+            clearInterval(t.playing);
+            t.playing=null;
+        },this.lastObjectTime+2000,this);
     }
 };
 
@@ -642,21 +659,18 @@ function readOsu( osuFileData ){
 </script>
 <script>
 
+let progressBar=document.querySelector('progress');
+function updateProgress(){
+    let lastObjectTime=osuCTBViewr.lastObjectTime | 1;//prevent div by 0
+    progressBar.value=osuCTBViewr.offsetTime/lastObjectTime;
+}
+osuCTBViewr.c.onchange=updateProgress;
+
 testVectors=[];
-testVectors.push( new vector(1,2) );
-testVectors.push( new vector(5,6) );
-testVectors.push( new vector(1,2) );
-console.log( testVectors[0]==testVectors[1] );
-console.log( testVectors[0]==testVectors[2] );
-console.log( testVectors[0].eq( testVectors[1] ) );
-console.log( testVectors[0].eq( testVectors[2] ) );
+testVectors.push( new vector(110,192) );
+testVectors.push( new vector(446,192) );
 
 sp= new SliderPath('L',testVectors);
 sp.ensureInitialised();
-console.log(sp.controlPoints);
-console.log(sp.calculatedPath);
-console.log(sp.cumulativeLength);
-console.log(sp.Distance);
-console.log(sp.PositionAt(0.5));
 
 </script>
