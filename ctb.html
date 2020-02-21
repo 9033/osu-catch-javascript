@@ -587,6 +587,10 @@ class osuCTBView extends myCanvas {
             t.playing=null;
         },this.lastObjectTime+2000,this);
     }
+    getProgress(){//현재 진행률 (return 0~1)
+        let lastObjectTime=this.lastObjectTime | 1;//prevent div by 0
+        return this.offsetTime/lastObjectTime;
+    }
 };
 
 </script>
@@ -660,11 +664,10 @@ function readOsu( osuFileData ){
 <script>
 
 let progressBar=document.querySelector('progress');
-function updateProgress(){
-    let lastObjectTime=osuCTBViewr.lastObjectTime | 1;//prevent div by 0
-    progressBar.value=osuCTBViewr.offsetTime/lastObjectTime;
+function updateProgressBar(){
+    progressBar.value = osuCTBViewr.getProgress();
 }
-osuCTBViewr.c.onchange=updateProgress;
+osuCTBViewr.c.onchange=updateProgressBar;
 
 testVectors=[];
 testVectors.push( new vector(110,192) );
