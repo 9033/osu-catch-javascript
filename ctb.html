@@ -19,7 +19,7 @@ drop osu file here
 // by vue.js
 */
 
-var fileName = new Vue({
+var fileName = new Vue({//for file name viewer
     el: '#fileName',
     data: {
         filename: 'drag and drop'
@@ -603,7 +603,7 @@ function dropFile(e){
     fileName.filename=files.name;
     //read osu file
     const reader = new FileReader();
-    reader.onload = function(evt) {
+    reader.onload = function(evt) {//read and play
         fileData=evt.target.result;
         document.querySelector("#fileContents").value= fileData;
         
@@ -614,7 +614,7 @@ function dropFile(e){
         osuCTBViewr.playHitObjects();
     };
     
-    if( /.+\.osu$/.test(files.name) ==true){
+    if( /.+\.osu$/.test(files.name) ==true){//check file extension
         reader.readAsText(files);//text
     }
     else {
@@ -630,20 +630,20 @@ function readOsu( osuFileData ){
     let idx=0;
     for(;idx<osuFileData.length;idx++){
         let line=osuFileData[idx];
-        if( /^osu file format/.test(line) ){
+        if( /^osu file format/.test(line) ){//read version of osu file foramt
             osuData['osu file foramt']=/osu file format\s(\w+)/.exec(line)[1];//'v14'
         }
-        else if( /^([^:,]+):(.+)$/.test(line) ){
+        else if( /^([^:,]+):(.+)$/.test(line) ){//read attributes
             let result=/^(.+):(.+)$/.exec(line);
             osuData[ result[1] ]=result[2];
         }
-        else if( /\[.+\]/.test(line) ){
+        else if( /\[.+\]/.test(line) ){//read HitObjects, TimingPoints, Colours, Events
             let result=/\[(.+)\]/.exec(line);
             if( false == ['HitObjects','TimingPoints','Colours','Events'].includes( result[1] ) )
                 continue;
             osuData[ result[1] ]=[];
             idx++;
-            for(;idx<osuFileData.length;idx++){
+            for(;idx<osuFileData.length;idx++){//read data
                 let line=osuFileData[idx];
                 if( line.length > 0 ){
                     osuData[ result[1] ].push(line);
