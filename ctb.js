@@ -86,4 +86,4 @@ testVectors.push( new vector(110,192) );
 testVectors.push( new vector(446,192) );
 
 sp= new SliderPath('L',testVectors);
-sp.ensureInitialised();
+sp.ensureInitialized();

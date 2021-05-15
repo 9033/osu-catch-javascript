@@ -144,14 +144,14 @@ class SliderPath{
 
       this.calculatedPath=[];
       this.cumulativeLength=[];
-      this.isInitialised=false;
+      this.isInitialized=false;
       this.Distance=0;
   }
-  ensureInitialised(){
-      if (this.isInitialised)
+  ensureInitialized(){
+      if (this.isInitialized)
           return;
 
-      this.isInitialised = true;
+      this.isInitialized = true;
 
       this.calculatePath();
       this.calculateCumulativeLength();
@@ -226,7 +226,7 @@ SliderPath.prototype.indexOfDistance=function(d){
   return this.cumulativeLength.length-1;
 }
 SliderPath.prototype.PositionAt=function(progress){
-  this.ensureInitialised();
+  this.ensureInitialized();
   let d=this.progressToDistance(progress);
   return this.interpolateVertices(this.indexOfDistance(d), d);
 }
@@ -392,7 +392,7 @@ class osuCTBView extends myCanvas {
 
       //JuiceStream
       let sliderPath = new SliderPath(sliderType,curvePoints);
-      sliderPath.ensureInitialised();
+      sliderPath.ensureInitialized();
       let base_scoring_distance = 100;//const
       let scoringDistance=base_scoring_distance * this.SliderMultiplier * speedMultiplier;
       let Velocity = scoringDistance / beatLength;
