@@ -1,0 +1,14 @@
+textarea{
+  width:100%;
+  height:300px;
+}
+#file{
+  height:100px;
+  width: 500px;
+  border:1px solid black;
+}
+#myCanvas{
+  width: 80vw;
+  height: calc(80vw / (640/480));
+  background-color:#333;
+}
